@@ -1,0 +1,102 @@
+import { spawn, execFileSync } from "node:child_process";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
+import { getSocketPath } from "./sessions.js";
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+export async function spawnDaemon(options) {
+    const stdout = process.stdout;
+    const rows = options.rows ?? stdout.rows ?? 24;
+    const cols = options.cols ?? stdout.columns ?? 80;
+    const serverModule = path.join(__dirname, "server.js");
+    const config = JSON.stringify({
+        name: options.name,
+        command: options.command,
+        args: options.args,
+        displayCommand: options.displayCommand,
+        cwd: options.cwd ?? process.cwd(),
+        rows,
+        cols,
+        ephemeral: options.ephemeral ?? false,
+    });
+    const child = spawn(process.execPath, [serverModule], {
+        detached: true,
+        stdio: ["ignore", "ignore", "pipe"],
+        env: { ...process.env, PTY_SERVER_CONFIG: config },
+    });
+    // Capture stderr for better error reporting
+    let stderrOutput = "";
+    child.stderr?.on("data", (data) => {
+        stderrOutput += data.toString();
+    });
+    // Detect early daemon crash before the socket appears
+    let earlyExit = false;
+    let earlyExitCode = null;
+    child.on("exit", (code) => {
+        earlyExit = true;
+        earlyExitCode = code;
+    });
+    child.stderr?.unref?.();
+    child.unref();
+    await waitForSocket(options.name, 3000, () => {
+        if (earlyExit) {
+            const details = stderrOutput.trim();
+            const msg = `Daemon process exited immediately (code ${earlyExitCode ?? "unknown"}).`;
+            throw new Error(details ? `${msg}\n${details}` : `${msg} Is the command valid?`);
+        }
+    });
+}
+export function waitForSocket(name, timeoutMs, earlyCheck) {
+    const socketPath = getSocketPath(name);
+    const start = Date.now();
+    return new Promise((resolve, reject) => {
+        function check() {
+            // Check for early daemon failure
+            try {
+                earlyCheck?.();
+            }
+            catch (e) {
+                reject(e);
+                return;
+            }
+            if (Date.now() - start > timeoutMs) {
+                reject(new Error(`Timeout waiting for session "${name}" to start`));
+                return;
+            }
+            try {
+                const stat = fs.statSync(socketPath);
+                if (stat) {
+                    setTimeout(resolve, 100);
+                    return;
+                }
+            }
+            catch { }
+            setTimeout(check, 50);
+        }
+        check();
+    });
+}
+export function resolveCommand(cmd) {
+    // Already absolute — just verify it exists
+    if (path.isAbsolute(cmd)) {
+        if (!fs.existsSync(cmd)) {
+            throw new Error(`Command not found: ${cmd}`);
+        }
+        return cmd;
+    }
+    // Relative path (contains /) — resolve against cwd
+    if (cmd.includes("/")) {
+        const resolved = path.resolve(cmd);
+        if (!fs.existsSync(resolved)) {
+            throw new Error(`Command not found: ${cmd}`);
+        }
+        return resolved;
+    }
+    // Bare command name — look up in PATH
+    try {
+        return execFileSync("which", [cmd], { encoding: "utf8" }).trim();
+    }
+    catch {
+        throw new Error(`Command not found: ${cmd}`);
+    }
+}

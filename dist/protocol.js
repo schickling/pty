@@ -1,0 +1,89 @@
+import { Buffer } from "node:buffer";
+export const MessageType = {
+    DATA: 0, // Terminal data (bidirectional)
+    ATTACH: 1, // Client → Server: attaching with terminal size
+    DETACH: 2, // Client → Server: detaching
+    RESIZE: 3, // Client → Server: terminal resized
+    EXIT: 4, // Server → Client: process exited
+    SCREEN: 5, // Server → Client: screen buffer replay on attach
+    PEEK: 6, // Client → Server: read-only attach (no input, no resize)
+    STATUS: 7, // Client → Server: request stats; Server → Client: JSON stats response
+};
+// Packet wire format: [type: uint8][length: uint32BE][payload: N bytes]
+const HEADER_SIZE = 5;
+export function encodePacket(type, payload) {
+    const header = Buffer.alloc(HEADER_SIZE);
+    header.writeUInt8(type, 0);
+    header.writeUInt32BE(payload.length, 1);
+    return Buffer.concat([header, payload]);
+}
+export function encodeData(data) {
+    return encodePacket(MessageType.DATA, Buffer.from(data));
+}
+export function encodeAttach(rows, cols) {
+    const payload = Buffer.alloc(4);
+    payload.writeUInt16BE(rows, 0);
+    payload.writeUInt16BE(cols, 2);
+    return encodePacket(MessageType.ATTACH, payload);
+}
+export function encodeDetach() {
+    return encodePacket(MessageType.DETACH, Buffer.alloc(0));
+}
+export function encodeResize(rows, cols) {
+    const payload = Buffer.alloc(4);
+    payload.writeUInt16BE(rows, 0);
+    payload.writeUInt16BE(cols, 2);
+    return encodePacket(MessageType.RESIZE, payload);
+}
+export function encodeExit(code) {
+    const payload = Buffer.alloc(4);
+    payload.writeInt32BE(code, 0);
+    return encodePacket(MessageType.EXIT, payload);
+}
+export function encodePeek(plain = false) {
+    const payload = Buffer.alloc(1);
+    payload.writeUInt8(plain ? 1 : 0, 0);
+    return encodePacket(MessageType.PEEK, payload);
+}
+export function encodeScreen(data) {
+    return encodePacket(MessageType.SCREEN, Buffer.from(data));
+}
+export function encodeStatus() {
+    return encodePacket(MessageType.STATUS, Buffer.alloc(0));
+}
+export function encodeStatusResponse(json) {
+    return encodePacket(MessageType.STATUS, Buffer.from(json));
+}
+export function decodeSize(payload) {
+    if (payload.length < 4) {
+        return { rows: 24, cols: 80 };
+    }
+    return {
+        rows: payload.readUInt16BE(0),
+        cols: payload.readUInt16BE(2),
+    };
+}
+export function decodeExit(payload) {
+    if (payload.length < 4) {
+        return -1;
+    }
+    return payload.readInt32BE(0);
+}
+/** Streaming packet parser that handles partial reads on a stream socket. */
+export class PacketReader {
+    buffer = Buffer.alloc(0);
+    feed(data) {
+        this.buffer = Buffer.concat([this.buffer, data]);
+        const packets = [];
+        while (this.buffer.length >= HEADER_SIZE) {
+            const type = this.buffer.readUInt8(0);
+            const length = this.buffer.readUInt32BE(1);
+            if (this.buffer.length < HEADER_SIZE + length)
+                break;
+            const payload = Buffer.from(this.buffer.subarray(HEADER_SIZE, HEADER_SIZE + length));
+            packets.push({ type, payload });
+            this.buffer = this.buffer.subarray(HEADER_SIZE + length);
+        }
+        return packets;
+    }
+}
