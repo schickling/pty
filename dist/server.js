@@ -2,8 +2,11 @@ import * as net from "node:net";
 import * as fs from "node:fs";
 import { execFileSync } from "node:child_process";
 import * as pty from "node-pty";
-import xterm from "@xterm/headless";
-import xtermSerialize from "@xterm/addon-serialize";
+// @xterm packages ship CJS + ESM but lack proper `exports` maps, causing
+// Node CJS interop and bundler resolution to diverge. Import the ESM entry
+// directly so both Node and bundlers resolve named exports consistently.
+import { Terminal } from "@xterm/headless/lib-headless/xterm-headless.mjs";
+import { SerializeAddon } from "@xterm/addon-serialize/lib/addon-serialize.mjs";
 import { MessageType, PacketReader, encodeData, encodeExit, encodeScreen, encodeStatusResponse, decodeSize, } from "./protocol.js";
 import { getSocketPath, getPidPath, ensureSessionDir, cleanup, cleanupAll, writeMetadata, readMetadata, } from "./sessions.js";
 import { EventWriter, clearEvents, EventType } from "./events.js";
@@ -50,13 +53,13 @@ export class PtyServer {
         this.options = options;
         this.eventWriter = new EventWriter(options.name);
         // Set up xterm-headless for screen buffer tracking
-        this.terminal = new xterm.Terminal({
+        this.terminal = new Terminal({
             rows: options.rows,
             cols: options.cols,
             scrollback: 10000,
             allowProposedApi: true,
         });
-        this.serialize = new xtermSerialize.SerializeAddon();
+        this.serialize = new SerializeAddon();
         this.terminal.loadAddon(this.serialize);
         // Track terminal modes not exposed by xterm's serialize addon
         this.terminal.parser.registerCsiHandler({ prefix: "?", final: "h" }, (params) => {
