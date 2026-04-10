@@ -5,6 +5,7 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
 import { queryStats } from "../src/client.ts";
+import { spawnDaemon } from "../src/spawn.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const nodeBin = process.execPath;
@@ -99,6 +100,28 @@ afterEach(() => {
 });
 
 describe("spawnDaemon options", () => {
+  it("launches via the pty-daemon sidecar", async () => {
+    const dir = makeSessionDir();
+    const name = uniqueName();
+
+    process.env.PTY_SESSION_DIR = dir;
+
+    await spawnDaemon({
+      name,
+      command: "cat",
+      args: [],
+      displayCommand: "cat",
+    });
+
+    const stats = await queryStats(name);
+    expect(stats.name).toBe(name);
+    expect(stats.process.alive).toBe(true);
+
+    const pidFile = path.join(dir, `${name}.pid`);
+    const pid = parseInt(fs.readFileSync(pidFile, "utf-8").trim(), 10);
+    bgPids.push(pid);
+  }, 15000);
+
   it("CLI passes through to spawnDaemon with options object", async () => {
     const dir = makeSessionDir();
     const name = uniqueName();

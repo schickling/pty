@@ -8,7 +8,7 @@ export async function spawnDaemon(options) {
     const stdout = process.stdout;
     const rows = options.rows ?? stdout.rows ?? 24;
     const cols = options.cols ?? stdout.columns ?? 80;
-    const serverModule = path.join(__dirname, "server.js");
+    const daemonBin = process.env.PTY_DAEMON_BIN ?? path.join(__dirname, "..", "bin", "pty-daemon");
     const config = JSON.stringify({
         name: options.name,
         command: options.command,
@@ -19,7 +19,7 @@ export async function spawnDaemon(options) {
         cols,
         ephemeral: options.ephemeral ?? false,
     });
-    const child = spawn(process.execPath, [serverModule], {
+    const child = spawn(daemonBin, [], {
         detached: true,
         stdio: ["ignore", "ignore", "pipe"],
         env: { ...process.env, PTY_SERVER_CONFIG: config },

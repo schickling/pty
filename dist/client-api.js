@@ -4,7 +4,6 @@
 export { listSessions, getSession, gc, validateName, getSessionDir, getSocketPath, cleanupSocket, cleanupAll, } from "./sessions.js";
 // Session creation
 export { spawnDaemon, resolveCommand, waitForSocket } from "./spawn.js";
-export { PtyServer } from "./server.js";
 // Session interaction (programmatic — no process.exit, no stdin/stdout)
 export { SessionConnection, sendData, peekScreen, } from "./connection.js";
 // Session interaction (CLI-oriented — uses process.stdin/stdout, may call process.exit)

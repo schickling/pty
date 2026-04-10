@@ -27,12 +27,17 @@
     "LICENSE"
   ],
   "bin": {
-    "pty": "./bin/pty"
+    "pty": "./bin/pty",
+    "pty-daemon": "./bin/pty-daemon"
   },
   "exports": {
     "./testing": {
       "types": "./dist/testing/index.d.ts",
       "default": "./dist/testing/index.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "default": "./dist/server.js"
     },
     "./tui": {
       "types": "./dist/tui/index.d.ts",
