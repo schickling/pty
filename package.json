@@ -1,6 +1,6 @@
 {
   "name": "@myobie/pty",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "Persistent terminal sessions with detach/attach, plus a Playwright-style testing library for TUI apps",
   "type": "module",
   "license": "MIT",
@@ -22,16 +22,22 @@
     "dist/",
     "completions/",
     "docs/",
+    "scripts/postinstall.js",
     "README.md",
     "LICENSE"
   ],
   "bin": {
-    "pty": "./bin/pty"
+    "pty": "./bin/pty",
+    "pty-daemon": "./bin/pty-daemon"
   },
   "exports": {
     "./testing": {
       "types": "./dist/testing/index.d.ts",
       "default": "./dist/testing/index.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "default": "./dist/server.js"
     },
     "./tui": {
       "types": "./dist/tui/index.d.ts",
@@ -45,7 +51,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "prepublishOnly": "npm run build",
-    "postinstall": "chmod +x node_modules/node-pty/prebuilds/*/spawn-helper 2>/dev/null || true",
+    "postinstall": "node scripts/postinstall.js",
     "prepare": "git config core.hooksPath githooks 2>/dev/null || true; sh scripts/update-nix-hash.sh 2>/dev/null || true",
     "install-completions": "sh scripts/install-completions.sh",
     "typecheck": "tsc",
